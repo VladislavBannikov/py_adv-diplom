@@ -1,6 +1,8 @@
 from VK.VK import VK
 import datetime
 from dateutil.relativedelta import relativedelta
+import db.db_orm
+import copy
 
 vk = VK()
 
@@ -8,24 +10,35 @@ vk = VK()
 class User:
     """
     to create User object parameter user (userID or dict with user properties) is required
+    query DB to check if user already there and retrieve info
     """
     __FIELDS_TO_GET = 'is_closed, books, city, has_photo, interests, sex, relation, bdate'
     __PHOTOS = []
     __IS_PHOTO_INIT = False
 
     def __init__(self, user):
+        user_local_var = copy.copy(user)
         self.__IS_INFO_INIT = False
         self.__INFO = dict()
-        if isinstance(user, int):
-            self.__ID = str(user)
-        elif isinstance(user, str):  # if screen_name convert to ID
-            if user.isdigit():
-                self.__ID = user
+
+        # TODO: optimize this mess
+        # check if info already in DB
+        if isinstance(user_local_var, str) or isinstance(user_local_var, int):
+            if str(user_local_var).isdigit():
+                info_from_db = db.db_orm.get_info_by_id(user_local_var)
+                if info_from_db:
+                    user_local_var = info_from_db
+
+        if isinstance(user_local_var, int):
+            self.__ID = str(user_local_var)
+        elif isinstance(user_local_var, str):  # if screen_name convert to ID
+            if user_local_var.isdigit():
+                self.__ID = user_local_var
             else:
-                self.__ID = str(User.screen_name_to_id(user))
-        elif isinstance(user, dict):  # if dict assign to user_info
-            self.__ID = user.get('id')
-            self.__INFO = user
+                self.__ID = str(User.screen_name_to_id(user_local_var))
+        elif isinstance(user_local_var, dict):  # if dict assign to user_info
+            self.__ID = user_local_var.get('id')
+            self.__INFO = user_local_var
             self.__IS_INFO_INIT = True
 
         self.__FRIENDS = []  # list of User class
@@ -190,8 +203,26 @@ class User:
         self.__FRIENDS = list
         self.__IS_FRIENDS_INIT = True
 
-    def update_info1(self, info: dict):
+    def update_info_from_dict(self, info: dict, db_write=False):
         self.__INFO.update(info)
+        if db_write:
+            db.db_orm.update_info(self.get_id(), self.get_info())
+
+    def check_info_completeness(self):
+        """
+        Check if user have all required fields
+        :return: return list of fields without information
+        """
+
+        keys = ["books", "interests"]  # TODO: make this as property of module
+        user_info = self.get_info()
+        empty_info = []
+        for k in keys:
+            if not user_info.get(k, None):
+                empty_info.append(k)
+        if not self.get_age():
+            empty_info.append('bdate')
+        return empty_info
 
 # ==========getters============
     def get_id(self):
@@ -278,7 +309,12 @@ class User:
 
     def get_photos(self):
         if not self.__IS_PHOTO_INIT:
-            self.update_photos()
+            photo_from_db = db.db_orm.get_photos(self.get_id())
+            if photo_from_db:
+                self.__PHOTOS = photo_from_db
+            else:
+                self.update_photos()
+                db.db_orm.add_photos(self.get_id(), self.__PHOTOS)
             self.__IS_PHOTO_INIT = True
         return self.__PHOTOS
 

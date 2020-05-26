@@ -3,12 +3,51 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
+from sqlalchemy_utils import database_exists, create_database
+import system_settings
 
 
 Base = declarative_base()
-engine = create_engine('postgresql://netology_user:1@localhost/vk')
-Session = sessionmaker(bind=engine)
-session = Session()
+
+
+class __DBVK():
+    """
+    create db connection and check if db and tables are exist
+    Note: to check tables are exist run init_database() at the bottom of the module
+    """
+    DB_NAME = 'vk_'+system_settings.VK_APP_ID
+
+    def __init__(self):
+        self.engine = None
+        self.session = None
+        # self.conn = None
+        self.db_connect()
+
+    def db_connect(self):
+        try:
+            conn_string_vk_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD, self.DB_NAME)
+            conn_string_postgres_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD,
+                                                                         "postgres")
+            #  check and create db if not exists
+            if not database_exists(conn_string_vk_db): #TODO: replace with SELECT datname FROM pg_database where datname = 'vk_7465530'
+                engine_postgres = create_engine(conn_string_postgres_db)
+                conn = engine_postgres.connect()
+                conn.execute("commit")
+                conn.execute(f"create database {self.DB_NAME}")
+                conn.close()
+
+            #  Create session
+            self.engine = create_engine(conn_string_vk_db)
+            Session = sessionmaker(bind=self.engine)
+            self.session = Session()
+
+        except Exception as e:
+            print(e)
+            exit(1)
+
+
+__dbvk = __DBVK()
 
 
 class User(Base):
@@ -35,8 +74,27 @@ def get_ids():
     """
     :return: all user's in in db (list)
     """
-    users = session.query(User).all()
+    users = __dbvk.session.query(User).all()
     return [u.id for u in users]
+
+
+def get_candidates_id(user_id):
+    """
+    :param user_id:
+    :return: list of candidates id
+    """
+    cand_ids = __dbvk.session.query(Score.candidate_id).filter(Score.user_id == user_id).all()
+    return_candidates = [i for i, in cand_ids]
+
+    cand_ids = __dbvk.session.query(Score.user_id).filter(Score.candidate_id == user_id).all()
+    return_candidates = return_candidates + [i for i, in cand_ids]
+
+    return return_candidates
+
+
+def get_top_10_candidates(user_id):
+    cand_ids = __dbvk.session.query(Score.candidate_id, Score.score).filter(Score.user_id==user_id).order_by(Score.score.desc()).all()
+    return cand_ids[:10]
 
 
 def add_score(user_id: Integer, cand_score: list):
@@ -48,8 +106,8 @@ def add_score(user_id: Integer, cand_score: list):
     """
     for cs in cand_score:
         rec = Score(user_id=user_id, candidate_id=cs[0], score=cs[1])
-        session.add(rec)
-    session.commit()
+        __dbvk.session.add(rec)
+    __dbvk.session.commit()
 
 
 def get_info_by_id(user_id):
@@ -57,7 +115,7 @@ def get_info_by_id(user_id):
     :param user_id:
     :return: info (dict, json) or None
     """
-    u = session.query(User).get(user_id)
+    u = __dbvk.session.query(User).get(user_id)
     if u:
         return u.info
     else:
@@ -72,8 +130,23 @@ def add_users(info):
     """
     for i in info:
         u = User(id=i.get('id'), info=i)
-        session.add(u)
-    session.commit()
+        __dbvk.session.add(u)
+    __dbvk.session.commit()
+
+
+def update_info(user_id, info):
+    """
+    Update info for particular user
+    :param user_id: pk in User table
+    :param info: info (JSON/dict format)
+    :return: No return
+    """
+    user = __dbvk.session.query(User).get(user_id)
+    if user:
+        user.info = info
+        __dbvk.session.commit()
+    else:
+        raise Exception (f"User id {user_id} not found in db")
 
 
 def add_photos(user_id, photos):
@@ -83,9 +156,9 @@ def add_photos(user_id, photos):
     :param photos: Info about photo in dict, json.
     :return: No return
     """
-    x = session.query(User).get(user_id)
+    x = __dbvk.session.query(User).get(user_id)
     x.photos = photos
-    session.commit()
+    __dbvk.session.commit()
 
 
 def get_photos(user_id):
@@ -93,7 +166,7 @@ def get_photos(user_id):
     :param user_id:
     :return: photos (dict, json) or None
     """
-    x = session.query(User).get(user_id)
+    x = __dbvk.session.query(User).get(user_id)
     if x:
         return x.photos
     else:
@@ -105,8 +178,8 @@ def del_users():
     Clean up User table
     :return: No return
     """
-    session.query(User).delete()
-    session.commit()
+    __dbvk.session.query(User).delete()
+    __dbvk.session.commit()
 
 
 def del_score():
@@ -114,8 +187,8 @@ def del_score():
     Clean up Score table
     :return: No return
     """
-    session.query(Score).delete()
-    session.commit()
+    __dbvk.session.query(Score).delete()
+    __dbvk.session.commit()
 
 
 def init_database():
@@ -123,7 +196,7 @@ def init_database():
     Create all tables
     :return: No return
     """
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(__dbvk.engine)
 
 
 def delete_all():
@@ -131,11 +204,13 @@ def delete_all():
     Delete all tables
     :return: No return
     """
-    Base.metadata.drop_all(engine)
+    Base.metadata.drop_all(__dbvk.engine)
 
 
 if __name__ == '__main__':
     pass
+else:
+    init_database()
 
 
 

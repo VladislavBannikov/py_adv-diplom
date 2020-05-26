@@ -1,0 +1,7 @@
+#[VK settings]
+VK_TOKEN = "300d00a80acb491c5fceda7a5e283485b250c84bc8846e8fb1bae243150fff2ca845fe622a617d2a200e8"
+VK_COUNT_TO_FIND = 1000
+
+
+
+

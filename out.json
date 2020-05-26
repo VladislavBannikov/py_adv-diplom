@@ -1,85 +1,182 @@
 [
  {
-  "user_url": "https://vk.com/id263112051",
-  "score": 1.5,
+  "user_url": "https://vk.com/id37224901",
+  "score": 2.6,
   "photos_id": [
-   334392889
+   {
+    "photo_id": 431903778,
+    "likes": 262
+   },
+   {
+    "photo_id": 289992022,
+    "likes": 145
+   },
+   {
+    "photo_id": 311225489,
+    "likes": 120
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id282701833",
-  "score": 1.5,
+  "user_url": "https://vk.com/id529502",
+  "score": 2.6,
   "photos_id": [
-   346926000
+   {
+    "photo_id": 456239747,
+    "likes": 149
+   },
+   {
+    "photo_id": 290540598,
+    "likes": 137
+   },
+   {
+    "photo_id": 378209043,
+    "likes": 127
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id7673177",
+  "user_url": "https://vk.com/id230559943",
   "score": 1.5,
   "photos_id": [
-   360080199,
-   346223079,
-   343454583
+   {
+    "photo_id": 456239150,
+    "likes": 2071
+   },
+   {
+    "photo_id": 456239067,
+    "likes": 1919
+   },
+   {
+    "photo_id": 456239227,
+    "likes": 1755
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id9767194",
+  "user_url": "https://vk.com/id27154105",
   "score": 1.5,
   "photos_id": [
-   436101741,
-   416935702,
-   291939070
+   {
+    "photo_id": 409901935,
+    "likes": 1657
+   },
+   {
+    "photo_id": 306551207,
+    "likes": 1341
+   },
+   {
+    "photo_id": 457245977,
+    "likes": 1330
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id5194617",
+  "user_url": "https://vk.com/id191056087",
   "score": 1.5,
   "photos_id": [
-   326062008,
-   280800748,
-   318414174
+   {
+    "photo_id": 302857967,
+    "likes": 349
+   },
+   {
+    "photo_id": 305451854,
+    "likes": 300
+   },
+   {
+    "photo_id": 299198436,
+    "likes": 155
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id27106412",
+  "user_url": "https://vk.com/id13977734",
   "score": 1.5,
   "photos_id": [
-   421843165,
-   456240374,
-   456239961
+   {
+    "photo_id": 426681540,
+    "likes": 426
+   },
+   {
+    "photo_id": 456240390,
+    "likes": 391
+   },
+   {
+    "photo_id": 373752317,
+    "likes": 336
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id4614645",
+  "user_url": "https://vk.com/id25977000",
   "score": 1.5,
   "photos_id": [
-   323955895,
-   440494284,
-   288637414
+   {
+    "photo_id": 456239233,
+    "likes": 147
+   },
+   {
+    "photo_id": 416731398,
+    "likes": 142
+   },
+   {
+    "photo_id": 456239190,
+    "likes": 129
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id165425430",
+  "user_url": "https://vk.com/id313669",
   "score": 1.5,
   "photos_id": [
-   339769493
+   {
+    "photo_id": 456242896,
+    "likes": 1136
+   },
+   {
+    "photo_id": 427966256,
+    "likes": 1120
+   },
+   {
+    "photo_id": 456241182,
+    "likes": 1025
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id172283975",
+  "user_url": "https://vk.com/id134497171",
   "score": 1.5,
   "photos_id": [
-   321988522,
-   305013579,
-   405190823
+   {
+    "photo_id": 457241124,
+    "likes": 42
+   },
+   {
+    "photo_id": 457240989,
+    "likes": 33
+   },
+   {
+    "photo_id": 457240986,
+    "likes": 22
+   }
   ]
  },
  {
-  "user_url": "https://vk.com/id31435059",
+  "user_url": "https://vk.com/id5600721",
   "score": 1.5,
   "photos_id": [
-   457239440,
-   457239314
+   {
+    "photo_id": 456239042,
+    "likes": 183
+   },
+   {
+    "photo_id": 398832766,
+    "likes": 169
+   },
+   {
+    "photo_id": 342540616,
+    "likes": 146
+   }
   ]
  }
 ]

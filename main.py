@@ -1,69 +1,105 @@
 from VK.VK import VK
 from VK.User import User
-from VK.VK_utils import search_candidates_users, check_info_completeness, score_candidates
+from VK.VK_utils import search_candidates_users, score_candidates
 import db.db_orm
 import json
 import os
+import settings
 
-# settings
-__COUNT_TO_FIND = 1000
-__IS_DEBUG = False
-
-
-info_message = '''n - new search. Find candidates for lonely user;
-i - init (reset) database;
-t - generate new VK access token;
+info_message = '''u - Select lonely user
+s - Search new candidates for lonely user;
+t - Top 10 scored candidates (from local database)
+r - reset database;
 q - for exit
 '''
-cmd_list = ["n", "i", "t", "q"]
+cmd_list = ["u", "r", "t", "s", "q"]
+lonely_user: User = None
+# lonely_user = User('585578161')
 
 # Test Users ----------
 # 'svetlana_belyaeva_photographer'
 # ---------------------
 
 
-def out_result(cand_score1):
+def output_result(cand_score1):
     print(os.linesep, "Best candidates for lonely user:")
     with open("out.json", "w", encoding="utf-8") as f:
         json_result = []
+        out_pattern = '{:<40}{:<10}{:<120}'
+        if cand_score1:
+            print(out_pattern.format("Link", "Score", "Photos"))
         for cs in cand_score1:
-            j_out = {"user_url": str(cs[0]), "score": cs[1], "photos_id": [p.get("photo_id") for p in db.db_orm.get_photos(cs[0].get_id())]}
+            photos = cs[0].get_photos()
+            j_out = {"user_url": str(cs[0]), "score": round(cs[1], 2), "photos_id": photos}
             json_result.append(j_out)
-            print(j_out)
+            print(out_pattern.format(j_out['user_url'], j_out['score'], str(photos)))
         f.write(json.dumps(json_result, indent=True))
 
 
 if __name__ == '__main__':
     vk = VK()
-    vk.set_is_debug(__IS_DEBUG)
+    # db.db_orm.get_top_10_candidates(lonely_user.get_id())
+
+    def print_candidate_count_for_user(user_id):
+        already_checked_users_ids = db.db_orm.get_candidates_id(user_id)
+        print("Numer of scored candidates in database:", len(
+            already_checked_users_ids))
+
+    def ask_additional_info(empty_fields):
+        message = {"books": "Enter books (comma separated)",
+                   "interests": "Enter interests (comma separated)",
+                   "bdate": "Enter birth date (in dd.mm.yyyy format)"
+                   }
+        new_info = {}
+        for field_key in empty_fields:
+            # TODO: add validation
+            new_info.update({field_key: input(message[field_key] + ":")})
+        lonely_user.update_info_from_dict(new_info, db_write=True)
+
+    def check_lonely_user_selected():
+        if not lonely_user:
+            print("Please select lonely user")
+            return False
+        return True
 
     print(info_message)
     while 1:
-        cmd = input("SELECT ACTION:\n").lower()
+        cmd = input(f"[User:{lonely_user}] SELECT ACTION:\n").lower()
         if cmd in cmd_list:
             if cmd == 'q':
                 exit(0)
-            elif cmd == 'i':  # init (reset) database;
+            elif cmd == 'r':  # init (reset) database;
                 db.db_orm.delete_all()
                 db.db_orm.init_database()
-                # db.db_orm.del_score()  # drop records from  Score table
-                # db.db_orm.del_users()  # drop records from  User table
-            elif cmd == 't':  # generate new VK access token;
-                print(vk.generate_new_token())
-                print("User link above to generate VK access token. Create file token.key in app directory.")
-            elif cmd == 'n':  # new search. Find candidates for lonely user;
+            elif cmd == 'u':  # select lonely user
                 lonely_user = User(input("Enter lonely user id or screen name:").strip())
-                # lonely_user = User('585578161')
-                check_info_completeness(lonely_user)
+                print_candidate_count_for_user(lonely_user.get_id())
+            elif cmd == 't':  # Top 10 scored candidates (from local database)
+                if not check_lonely_user_selected():
+                    continue
+                best_cand = db.db_orm.get_top_10_candidates(lonely_user.get_id())
+                best_cand =[[User(c[0]),c[1]] for c in best_cand]
+                output_result(best_cand)
+
+            elif cmd == 's':  # new search. Find candidates for lonely user;
+                if not check_lonely_user_selected():
+                    continue
+
+                while True:
+                    empty_fields = lonely_user.check_info_completeness()
+                    if not empty_fields:
+                        break
+                    ask_additional_info(empty_fields)
+
 
                 ## find candidates and its score
-                already_checked_users_ids = db.db_orm.get_ids()
-                print("Candidates for lonely user already checked:", len(
-                    already_checked_users_ids))  # technically is it -1 (sometimes), because lonely user also in db (usually). I don't care
-                candidates = search_candidates_users(lonely_user, already_checked_users_ids, count_to_find=__COUNT_TO_FIND)
+                print_candidate_count_for_user(lonely_user.get_id())
+                candidates = search_candidates_users(lonely_user, db.db_orm.get_candidates_id(lonely_user.get_id()), count_to_find=settings.VK_COUNT_TO_FIND)
                 print("Found new candidates for lonely user", len(candidates))
+                print("Retrieving  info about users...")
                 User.update_friends_batch(candidates)
                 User.update_groups_batch(candidates)
+                print("Scoring users...")
                 cand_score = score_candidates(lonely_user, candidates)
 
                 ## record result to database
@@ -74,8 +110,8 @@ if __name__ == '__main__':
                 db.db_orm.add_score(lonely_user.get_id(), [[s[0].get_id(), s[1]] for s in cand_score])
 
                 ##  add photos to DB for 10 users with best match
-                for s in cand_score:
+                for s in cand_score[:10]:
                     db.db_orm.add_photos(s[0].get_id(), s[0].get_photos())
 
-                out_result(cand_score)
+                output_result(cand_score[:10])
 

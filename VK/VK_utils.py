@@ -3,28 +3,11 @@ from VK.VK import VK
 import copy
 from random import randint
 import os
+import system_settings
 
 
 vk = VK()
 __fields_to_check = "bdate, city, sex, books, interests"
-
-
-def check_info_completeness(user):
-    """
-    Check if user have all required fields, ask for information
-    :param user: User class
-    :return: No return
-    """
-    if not user.get_age():
-        bdate = input('Enter birth date (dd.mm.yyyy): ')
-        user.update_info1({'bdate': bdate})
-    if not user.get_books():
-        books = input('Enter books (comma separated): ')
-        user.update_info1({'books': books})
-    if not user.get_interests():
-        interests = input('Enter interests (comma separated): ')
-        user.update_info1({'interests': interests})
-
 
 def find_common(var1, var2) -> int:
     """
@@ -58,7 +41,7 @@ def search_candidates_users(user, exclude_ids, delta_age=3, count_to_find=20):
     :param count_to_find: Search parameter. Count of users to query VK API
     :return: Candidates (List of Users class)
     """
-    if vk.get_is_debug():  # debug message
+    if system_settings.DEBUG:  # debug message
         print(os.linesep, f'[Debug] Search_candidates_users has started')
     if isinstance(user, User):
         if not user.get_gender():
@@ -93,9 +76,9 @@ def score_candidates(user, candidates):
     Compare lonely user with candidates and calc scores
     :param user: Lonely user (User class)
     :param candidates: list of User classes
-    :return: Top 10 candidates (list of [candidate: User class, score:float])
+    :return: candidates (sorted by score list of [candidate: User class, score:float])
     """
-    if vk.get_is_debug():  # debug message
+    if system_settings.DEBUG:  # debug message
         print(os.linesep, f'[Debug] Score_candidates has started')
     u_age = user.get_age()
     u_city_id = user.get_city_id()
@@ -125,6 +108,6 @@ def score_candidates(user, candidates):
         # print(c, score)
         cand_score.append([c,score])
     cand_score.sort(key=lambda cand: cand[1], reverse=True)
-    return cand_score[:10]
+    return cand_score
 
 
