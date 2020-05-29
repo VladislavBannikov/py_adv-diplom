@@ -1,10 +1,9 @@
 from sqlalchemy import create_engine, Integer, Column, Float, String, Date, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import OperationalError
-from sqlalchemy_utils import database_exists, create_database
 import system_settings
 
 
@@ -25,25 +24,33 @@ class __DBVK():
         self.db_connect()
 
     def db_connect(self):
-        try:
-            conn_string_vk_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD, self.DB_NAME)
-            conn_string_postgres_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD,
+        conn_string_vk_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD, self.DB_NAME)
+        conn_string_postgres_db = 'postgresql://{}:{}@localhost/{}'.format(system_settings.DB_ADMIN_USER, system_settings.DB_ADMIN_PASSWORD,
                                                                          "postgres")
-            #  check and create db if not exists
-            if not database_exists(conn_string_vk_db): #TODO: replace with SELECT datname FROM pg_database where datname = 'vk_7465530'
-                engine_postgres = create_engine(conn_string_postgres_db)
-                conn = engine_postgres.connect()
-                conn.execute("commit")
-                conn.execute(f"create database {self.DB_NAME}")
-                conn.close()
 
+        # check if VK_* database exists, create if doesn't
+        try:
+            engine_postgres = create_engine(conn_string_postgres_db)
+            conn = engine_postgres.connect()
+            sql_text = text("SELECT datname FROM pg_database where datname = :db_name;")
+            rs = conn.execute(sql_text, db_name=self.DB_NAME)
+            if rs.rowcount == 0:
+                conn.execute("commit")
+                sql_text = text(f"create database {self.DB_NAME};")  #TODO: parameter substitution doesn't work for CREATE, sql.identifier should help
+                conn.execute(sql_text)
+            conn.close()
+        except Exception as e:
+            print(f'Error during creation database {self.DB_NAME}:', e)
+            exit(1)
+
+        # connect to VK_* database
+        try:
             #  Create session
             self.engine = create_engine(conn_string_vk_db)
             Session = sessionmaker(bind=self.engine)
             self.session = Session()
-
         except Exception as e:
-            print(e)
+            print('Error during connection to database {self.DB_NAME}:', e)
             exit(1)
 
 
