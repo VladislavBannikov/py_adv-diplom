@@ -16,6 +16,7 @@ my_demo_adv2_6.ipynb
 *.zip
 /names
 token.key
+raw.txt
 
 
 # Byte-compiled / optimized / DLL files

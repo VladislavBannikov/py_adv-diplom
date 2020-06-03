@@ -1,13 +1,14 @@
 from VK.User import User
-from VK.VK import VK
+from VK.VK import VKBase
 import copy
 from random import randint
 import os
-import system_settings
+from system_settings import DEBUG
 
+is_debug = DEBUG
 
-vk = VK()
 __fields_to_check = "bdate, city, sex, books, interests"
+
 
 def find_common(var1, var2) -> int:
     """
@@ -31,7 +32,7 @@ def find_common(var1, var2) -> int:
     return len(vars1[0] & vars1[1])
 
 
-def search_candidates_users(user, exclude_ids, delta_age=3, count_to_find=20):
+def search_candidates_users(user, exclude_ids, delta_age=3, find_count=20):
     """
     Find VK users (candidates for lonely user)
     properties: __FIELDS_TO_GET in User class
@@ -41,31 +42,34 @@ def search_candidates_users(user, exclude_ids, delta_age=3, count_to_find=20):
     :param count_to_find: Search parameter. Count of users to query VK API
     :return: Candidates (List of Users class)
     """
-    if system_settings.DEBUG:  # debug message
+    if is_debug:  # debug message
         print(os.linesep, f'[Debug] Search_candidates_users has started')
     if isinstance(user, User):
         if not user.get_gender():
             raise Exception(f'Gender for user {user} not specified')
 
         params = {
-            'count': count_to_find,
+            'count': find_count,
             'fields': user.get_fields_to_get(),
             # 'city': user.get_city_id(),
             'birth_day': randint(1, 28),  # workaround VK 1000 limitation
             'birth_month': randint(1, 12),
             'sex': user.get_gender_partner(),
-            'age_from': user.get_age() - delta_age,
-            'age_to': user.get_age() + delta_age,
             'has_photo': 1
         }
-        response = vk.vk_request(method='users.search', params=params)
+        if user.get_age():
+            params.update(
+                {'age_from': user.get_age() - delta_age,
+                 'age_to': user.get_age() + delta_age}
+            )
+        response = VKBase.vk_request(method='users.search', params=params)
         candidates = []
         for u_info in response.get('items'):
             candidates.append(User(u_info))
 
         candidates_copy = candidates[:]
         exclude_ids_set = set(exclude_ids)
-        for u in candidates:           # remove bad candidates
+        for u in candidates:  # remove bad candidates
             if u.is_closed() or u.get_id() in exclude_ids_set:
                 candidates_copy.remove(u)
     return candidates_copy
@@ -78,36 +82,32 @@ def score_candidates(user, candidates):
     :param candidates: list of User classes
     :return: candidates (sorted by score list of [candidate: User class, score:float])
     """
-    if system_settings.DEBUG:  # debug message
+    if is_debug:  # debug message
         print(os.linesep, f'[Debug] Score_candidates has started')
     u_age = user.get_age()
     u_city_id = user.get_city_id()
-    u_gr = set(user.get_groups())
-    u_fr = set(user.get_friends())
+    u_gr = set(user.get_groups()) if user.get_groups() else None
+    u_fr = set(user.get_friends()) if user.get_friends() else None
     u_books = user.get_books()
     u_interests = user.get_interests()
     # (важнее) друзья, возраст, группы, интересы, книги, город (менее важно)
     cand_score = []
     for c in candidates:
-        # print(c.get_info())
         score = 0
-        # print(c.get_info())
-        # print('==u_age', c.get_age())
-        if (c.get_city_id() and c.get_city_id() == u_city_id):
+        if u_city_id and c.get_city_id() and c.get_city_id() == u_city_id:
             score += 1.1
-        if find_common(c.get_books(), u_books) > 0:
+        if u_books and find_common(c.get_books(), u_books) > 0:
             score += 1.2
-        if find_common(c.get_interests(), u_interests) > 0:
+        if u_interests and find_common(c.get_interests(), u_interests) > 0:
             score += 1.3
-        if find_common(c.get_groups(), u_gr) > 0:
+        if u_gr and find_common(c.get_groups(), u_gr) > 0:
             score += 1.4
-        if (c.get_age() and c.get_age() == u_age):
+        if u_age and c.get_age() and c.get_age() == u_age:
             score += 1.5
-        if find_common(c.get_friends(), u_fr) > 0:
+        if u_fr and find_common(c.get_friends(), u_fr) > 0:
             score += 1.6
-        # print(c, score)
-        cand_score.append([c,score])
+        cand_score.append([c, score])
     cand_score.sort(key=lambda cand: cand[1], reverse=True)
+    if is_debug:  # debug message
+        print(os.linesep, f'[Debug] Score_candidates has finished')
     return cand_score
-
-

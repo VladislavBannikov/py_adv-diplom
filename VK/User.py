@@ -1,20 +1,18 @@
-from VK.VK import VK
+from VK.VK import VKBase
 import datetime
 from dateutil.relativedelta import relativedelta
 import db.db_orm
 import copy
 
-vk = VK()
+db = db.db_orm.dbvk
 
 
-class User:
+class User(VKBase):
     """
     to create User object parameter user (userID or dict with user properties) is required
     query DB to check if user already there and retrieve info
     """
-    __FIELDS_TO_GET = 'is_closed, books, city, has_photo, interests, sex, relation, bdate'
-    __PHOTOS = []
-    __IS_PHOTO_INIT = False
+    fields_to_get = 'is_closed, books, city, has_photo, interests, sex, relation, bdate, screen_name'
 
     def __init__(self, user):
         user_local_var = copy.copy(user)
@@ -25,7 +23,7 @@ class User:
         # check if info already in DB
         if isinstance(user_local_var, str) or isinstance(user_local_var, int):
             if str(user_local_var).isdigit():
-                info_from_db = db.db_orm.get_info_by_id(user_local_var)
+                info_from_db = db.get_info_by_id(user_local_var)
                 if info_from_db:
                     user_local_var = info_from_db
 
@@ -41,20 +39,27 @@ class User:
             self.__INFO = user_local_var
             self.__IS_INFO_INIT = True
 
-        self.__FRIENDS = []  # list of User class
-        self.__GROUPS = {}  # list of group IDs in ['items']
+        self.__FRIENDS = None  # []  # list of User class
+        self.__GROUPS = None  # {}  # list of group IDs in ['items']
+        self.__PHOTOS = None  # []
         self.__IS_FRIENDS_INIT = False
         self.__IS_GROUPS_INIT = False
+        self.__IS_PHOTOS_INIT = False
+        self.__IS_ADDITIONAL_INFO_REQUESTED = False
 
-    @staticmethod
-    def screen_name_to_id(name):
+    @classmethod
+    def screen_name_to_id(cls, name):
         """
         Query VK API to get user ID
         :param name: VK user screen_name
-        :return: VK user ID
+        :return: VK user ID or None if screen_name doesn't exists
         """
         params = {'screen_name': name}
-        return vk.vk_request(method='utils.resolveScreenName', params=params).get('object_id')
+        resp = cls.vk_request(method='utils.resolveScreenName', params=params)
+        if resp:
+            return resp.get('object_id', None)
+        else:
+            return None
 
     def load_info_from_vk(self):
         """
@@ -86,13 +91,13 @@ class User:
         if not is_get_info:  # create Users with ID only, not query to VK
             for uid in user_ids:
                 users.append(User(uid))
-        else:           # create Users with info, query to VK
+        else:  # create Users with info, query to VK
             user_ids = ','.join(str(i) for i in user_ids)
             params = {
                 'user_ids': user_ids,
-                'fields': cls.__FIELDS_TO_GET
+                'fields': cls.fields_to_get
             }
-            users_info = vk.vk_request(method='users.get', params=params)
+            users_info = cls.vk_request(method='users.get', params=params)
             for user_info in users_info:
                 users.append(User(user_info))
         return users
@@ -102,44 +107,51 @@ class User:
         Load friends list from VK
         :return:  No return
         """
+        self.__IS_FRIENDS_INIT = True
+        if self.is_closed():
+            return
+
         params = {
             'user_id': self.get_id(),
         }
-        response = vk.vk_request(method='friends.get', params=params)
+        response = self.vk_request(method='friends.get', params=params)
         friends_id = response.get('items')
         self.__FRIENDS = friends_id
-        self.__IS_FRIENDS_INIT = True
 
     def update_groups(self):
         """
         Load groups list from VK
         :return: No return
         """
+        self.__IS_GROUPS_INIT = True
+        if self.is_closed():
+            return
         params = {
             'user_id': self.get_id(),
         }
-        response = vk.vk_request(method='groups.get', params=params)
-        self.__GROUPS = response.get('items')
-        self.__IS_GROUPS_INIT = True
+        response = self.vk_request(method='groups.get', params=params)
+        self.__GROUPS = response.get('items', None)
 
     def update_photos(self):
         """
         Load 3 most liked photos from VK
         :return: No return
         """
+        self.__IS_PHOTOS_INIT = True
+        if self.is_closed():
+            return
         params = {
             "owner_id": self.get_id(),
             "album_id": "profile",
             "extended": "1",
             "count": "1000"
         }
-        photos_info = vk.vk_request('photos.get', params=params).get('items')
+        photos_info = self.vk_request('photos.get', params=params).get('items')
         photos_id_likes = []
         for pi in photos_info:
             photos_id_likes.append({"photo_id": pi.get('id'), "likes": pi.get('likes').get('count')})
         photos_id_likes.sort(key=lambda x: x.get('likes'), reverse=True)
         self.__PHOTOS = photos_id_likes[:3]
-        self.__IS_PHOTO_INIT = True
 
     @classmethod
     def update_friends_batch(cls, users):
@@ -156,7 +168,7 @@ class User:
                 no_friends.append(u.get_id())
 
         # retrieve friends in format [[user_id[<list of friends_id>]],...]
-        retrieved_ids = (vk.vk_request_batch("friends.get", no_friends))
+        retrieved_ids = (cls.vk_request_batch("friends.get", no_friends))
 
         # validate result and update friends_list for every user
         if not len(users) == len(retrieved_ids):
@@ -183,7 +195,7 @@ class User:
                 no_groups.append(u.get_id())
 
         # retrieve groups in format [[user_id[<list of groups_id>]],...]
-        retrieved_ids = (vk.vk_request_batch("groups.get", no_groups))
+        retrieved_ids = (cls.vk_request_batch("groups.get", no_groups))
 
         # validate result and update groups_list for every user
         if not len(users) == len(retrieved_ids):
@@ -206,7 +218,7 @@ class User:
     def update_info_from_dict(self, info: dict, db_write=False):
         self.__INFO.update(info)
         if db_write:
-            db.db_orm.update_info(self.get_id(), self.get_info())
+            db.update_info(self.get_id(), self.get_info())
 
     def check_info_completeness(self):
         """
@@ -224,7 +236,7 @@ class User:
             empty_info.append('bdate')
         return empty_info
 
-# ==========getters============
+    # ==========getters============
     def get_id(self):
         return self.__ID
 
@@ -232,7 +244,7 @@ class User:
         return self.get_info().get('is_closed', True)
 
     def is_can_access_closed(self):
-       return self.get_info().get('can_access_closed', False)
+        return self.get_info().get('can_access_closed', False)
 
     def is_deleted(self):
         return bool(self.get_info().get('deactivated', None))
@@ -265,6 +277,8 @@ class User:
 
     def get_age(self):
         d_now = datetime.datetime.now()
+        if 'bdate' not in self.get_info():
+            return None
         try:
             d_user = datetime.datetime.strptime(self.get_info().get('bdate'), '%d.%M.%Y')
         except (ValueError, TypeError):
@@ -308,25 +322,33 @@ class User:
         return self.get_info().get('interests', None)
 
     def get_photos(self):
-        if not self.__IS_PHOTO_INIT:
-            photo_from_db = db.db_orm.get_photos(self.get_id())
+        if not self.__IS_PHOTOS_INIT:
+            photo_from_db = db.get_photos(self.get_id())
             if photo_from_db:
-                self.__PHOTOS = photo_from_db
+                self.photos = photo_from_db
             else:
                 self.update_photos()
-                db.db_orm.add_photos(self.get_id(), self.__PHOTOS)
-            self.__IS_PHOTO_INIT = True
+                db.add_photos(self.get_id(), self.__PHOTOS)  # TODO: exclude db access
+            self.__IS_PHOTOS_INIT = True
         return self.__PHOTOS
 
     def get_info(self) -> dict:
         if not self.__IS_INFO_INIT:
             self.load_info_from_vk()
+            self.__IS_INFO_INIT = True
         return self.__INFO
+
+    def get_is_additional_info_requested(self) -> bool:
+        return self.__IS_ADDITIONAL_INFO_REQUESTED
+
+    def set_is_additional_info_requested(self, flg: bool):
+        self.__IS_ADDITIONAL_INFO_REQUESTED = flg
 
     @classmethod
     def get_fields_to_get(cls):
-        return cls.__FIELDS_TO_GET
-# ==================/getters============
+        return cls.fields_to_get
+
+    # ==================/getters============
 
     def __and__(self, other):
         return set(self.__FRIENDS) & set(other.get_friends())
@@ -336,7 +358,3 @@ class User:
 
     def __repr__(self):
         return f'https://vk.com/id{self.get_id()}'
-
-
-
-
