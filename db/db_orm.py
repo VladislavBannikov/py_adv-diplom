@@ -154,15 +154,20 @@ class DBVK():
         else:
             return None
 
-    def add_users(self, info):
+    def add_user(self, info: dict, autocommit=True):
+        u = User(id=info.get('id'), info=info)
+        self.session.add(u)
+        if autocommit:
+            self.session.commit()
+
+    def add_several_users(self, info: list):
         """
         Add users to database
         :param info: List of user info (dict, json)
         :return: No return
         """
         for i in info:
-            u = User(id=i.get('id'), info=i)
-            self.session.add(u)
+            self.add_user(i, autocommit=False)
         self.session.commit()
 
     def update_info(self, user_id, info):
@@ -177,7 +182,7 @@ class DBVK():
             user.info = info
             self.session.commit()
         else:
-            self.add_users(info)
+            self.add_user(info)
 
     def add_photos(self, user_id, photos):
         """

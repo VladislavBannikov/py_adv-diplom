@@ -5,6 +5,7 @@ import db.db_orm
 import json
 import os
 from settings import VK_COUNT_TO_FIND
+import datetime
 
 info_message = '''u - Select lonely user
 s - Search new candidates for lonely user
@@ -36,6 +37,21 @@ def output_result(cand_score1):
         f.write(json.dumps(json_result, indent=True))
 
 
+def validate_date(date_text: str):
+    try:
+        datetime.datetime.strptime(date_text, '%Y-%m-%d')
+    except ValueError:
+        return False
+    return True
+
+
+def validate_text(text: str):
+    if str.strip:
+        return True
+    else:
+        return False
+
+
 if __name__ == '__main__':
     VKBase.test_vk_connection_with_prompt()
     db = db.db_orm.dbvk
@@ -50,16 +66,19 @@ if __name__ == '__main__':
 
 
     def ask_additional_info(empty_fields):
-        message = {"books": "Enter books (comma separated)",
-                   "interests": "Enter interests (comma separated)",
-                   "bdate": "Enter birth date (in dd.mm.yyyy format)"
-                   }
+        for_loop_info = {"books": {"msg": "Enter books (comma separated)", "val_func": validate_text},
+                         "interests": {"msg": "Enter interests (comma separated)", "val_func": validate_text},
+                         "bdate": {"msg": "Enter birth date (in dd.mm.yyyy format)", "val_func": validate_date}}
+
         new_info = {}
-        for field_key in empty_fields:
-            # TODO: add validation
-            new_info.update({field_key: input(message[field_key] + ":")})
-        lonely_user.update_info_from_dict(new_info, db_write=True)
-        lonely_user.set_is_additional_info_requested(True)
+        for kind in empty_fields:
+            user_input = input(for_loop_info.get(kind).get("msg") + ":")
+            val_func = for_loop_info.get(kind).get("val_func")
+            if val_func(user_input):
+                new_info.update({kind: user_input})
+
+            lonely_user.update_info_from_dict(new_info, db_write=True)
+            lonely_user.set_is_additional_info_requested(True)
 
 
     def check_lonely_user_selected():
@@ -117,7 +136,7 @@ if __name__ == '__main__':
                 infos = [c.get_info() for c in candidates]
                 if not (db.get_info_by_id(lonely_user.get_id())):  # add lonely user to database if isn't there
                     infos.append(lonely_user.get_info())
-                db.add_users(infos)
+                db.add_several_users(infos)
                 db.add_score(lonely_user.get_id(), [[s[0].get_id(), s[1]] for s in cand_score])
 
                 ##  add photos to DB for 10 users with best match
