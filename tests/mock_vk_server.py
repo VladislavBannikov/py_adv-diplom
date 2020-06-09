@@ -4,7 +4,7 @@ import socket
 from threading import Thread
 import requests
 from urllib.parse import urljoin, urlparse, parse_qs
-from Tests.load_fixtures import get_id_screen_name
+from tests.load_fixtures import get_id_screen_name
 
 
 class MockServerRequestHandler(BaseHTTPRequestHandler):

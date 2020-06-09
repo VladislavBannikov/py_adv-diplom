@@ -1,5 +1,5 @@
 import unittest
-from VK import VK_utils as app
+from vk import vk_utils as app
 
 
 class TestFindCommon(unittest.TestCase):

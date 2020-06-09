@@ -157,16 +157,14 @@ class VKBase:
             elif 'error' in response.json():
                 err_code = response.json().get('error').get('error_code')
                 err_msg = response.json().get('error').get('error_msg')
-                key = response.json().get('error').get('request_params')[0].get('key')
-                value = response.json().get('error').get('request_params')[0].get('value')
                 if err_code == 6:  # 'Too many requests per second'
                     sleep(1)
                 else:
                     raise ExceptionVK(err_msg=err_msg, err_code=err_code)
             else:
                 break
-        list = response.json().get('response')
-        return list
+        vk_response = response.json().get('response')
+        return vk_response
 
     @classmethod
     def vk_request_batch(cls, method, ids):
@@ -180,20 +178,20 @@ class VKBase:
             print(os.linesep, f'[Debug] VK batch request {method} has started')
 
         def make_vk_script(method, ids: str, ):
-            code = 'var users = [%s]; \
-            var out = [] ; \
-            var i=0; \
-            while (i < users.length){{ \
-                out.push([users[i], API.%s({"user_id": users[i]}).items]); \
-                i= i+1; \
-            }} \
-            return out;' % (ids, method)
-            return code
+            vk_script_text = f''' var users = [{ids}]; 
+                        var out = [] ; 
+                        var i=0; 
+                        while (i < users.length){{{{ 
+                            out.push([users[i], API.{method}({{"user_id": users[i]}}).items]); 
+                            i= i+1; 
+                        }}}}
+                        return out;'''
+            return vk_script_text
 
         ids_copy = ids[:]
         out_ids = []
         while ids_copy:
-            ids_s = ','.join([str(i) for i in ids_copy[:25]])
+            ids_s = ','.join(tuple(str(i) for i in ids_copy[:25]))
             del ids_copy[:25]
             vk_script = make_vk_script(method, ids_s)
             t = cls.vk_request('execute', {"code": vk_script})

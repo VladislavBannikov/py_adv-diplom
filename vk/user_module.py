@@ -1,4 +1,4 @@
-from VK.VK import VKBase
+from vk.vk_module import VKBase
 import datetime
 from dateutil.relativedelta import relativedelta
 import db.db_orm
@@ -303,6 +303,15 @@ class User(VKBase):
         if not self.__IS_FRIENDS_INIT:
             self.update_friends()
         return self.__FRIENDS
+
+    def get_friends_count(self) -> int:
+        return len(self.get_friends())
+
+    def get_first_last_name(self) -> str:
+        info = self.get_info()
+        first_name = info.get('first_name')
+        last_name = info.get('last_name')
+        return f"{first_name} {last_name}"
 
     def get_is_friends_initiated(self):
         return self.__IS_FRIENDS_INIT

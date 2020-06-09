@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock, TestCase
-from VK import VK as app
-from Tests.load_fixtures import get_info
+from vk import vk_module as app
+from tests.load_fixtures import get_info
 import requests
 from system_settings import VK_API_VERSION
 from settings import VK_TOKEN
@@ -19,7 +19,7 @@ class TestVKRequest(TestCase):
             exit(1)
         cls.fixt_info = get_info()
 
-    @mock.patch("VK.VK.vk_token", "wrongtoken")
+    @mock.patch("vk.vk_module.vk_token", "wrongtoken")
     def test_vk_wrong_key_exception(self):
         self.assertRaises(app.ExceptionVK, app.VKBase().vk_request, "users.get", {})
 

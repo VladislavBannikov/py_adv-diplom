@@ -1,5 +1,5 @@
-from VK.User import User
-from VK.VK import VKBase
+from vk.user_module import User
+from vk.vk_module import VKBase
 import copy
 from random import randint
 import os

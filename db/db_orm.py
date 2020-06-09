@@ -6,7 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from system_settings import VK_APP_ID, DB_ADMIN_USER, DB_ADMIN_PASSWORD
 import system_settings
-from db.queries import queries as q
+from db.queries import Queries as q
 
 Base = declarative_base()
 
@@ -14,12 +14,11 @@ Base = declarative_base()
 class DBVK():
     """
     create db connection and check if db and tables are exist
-    Note: to check tables are exist run init_database() at the bottom of the module
+    Note: to check tables are exist run __init_database() at the bottom of the module
     """
 
     db_name_vk = 'vk_' + VK_APP_ID
     db_user = DB_ADMIN_USER
-    # db_pwd = "3" #DB_ADMIN_PASSWORD
     db_pwd = DB_ADMIN_PASSWORD
     db_host = system_settings.DB_HOSTNAME if hasattr(system_settings, 'DB_HOSTNAME') else 'localhost'
 
@@ -29,6 +28,23 @@ class DBVK():
         self.engine = None
         self.session = None
         self.conn = None
+
+    def check_connect_create(self):
+        # validate connection and database and connect to vk db
+        if not self.check_connection():
+            print('Error. Unable create connection to database. Check that Postgres ',
+                  'server is running and that credentials in system_settings.py are correct.')
+            exit(1)
+        if not self.__check_vk_db_exists():
+            if not self.create_vk_db():
+                print(f'Error during creation database {self.db_name_vk}')
+                exit(1)
+        if not self.__connect_to_vk_db():
+            print(f'Error during connection to database {self.db_name_vk}')
+            exit(1)
+        if not self.__init_database():
+            print(f'Unable to create tables in {self.db_name_vk} database')
+            exit(1)
 
     def check_connection(self):
         """
@@ -47,7 +63,7 @@ class DBVK():
     def get_current_database(self):
         try:
             if self.conn and not self.conn.closed:
-                rs = self.conn.execute(q.get_curren_db)
+                rs = self.conn.execute(q.get_current_db)
                 return rs.fetchone()[0]
         except Exception:
             return None
@@ -68,19 +84,19 @@ class DBVK():
             return False
         return con
 
-    def connect_to_vk_db(self):
+    def __connect_to_vk_db(self):
         try:
             self.conn = self.__connect_to_db(db_name=self.db_name_vk)
             self.engine = self.conn
-            Session = sessionmaker(bind=self.engine)
-            self.session = Session()
+            session = sessionmaker(bind=self.engine)
+            self.session = session()
             if self.is_connected_to_vk_db():
                 return True
         except Exception:
             return False
         return False
 
-    def check_vk_db_exists(self):
+    def __check_vk_db_exists(self):
         try:
             conn_temp = self.__connect_to_db()
             sql_text = text(q.sel_vk_db)
@@ -100,7 +116,7 @@ class DBVK():
                 f"create database {self.db_name_vk};")  # TODO: parameter substitution doesn't work for CREATE, sql.identifier should help
             conn_temp.execute(sql_text)
             conn_temp.close()
-            if self.check_vk_db_exists():
+            if self.__check_vk_db_exists():
                 return True
         except Exception:
             return None
@@ -111,25 +127,25 @@ class DBVK():
         :return: all user's in in db (list)
         """
         users = self.session.query(User).all()
-        return [u.id for u in users]
+        return (u.id for u in users)
 
     def get_candidates_id(self, user_id):
         """
         :param user_id:
         :return: list of candidates id
         """
-        cand_ids = self.session.query(Score.candidate_id).filter(Score.user_id == user_id).all()
-        return_candidates = [i for i, in cand_ids]
+        candidates_id = self.session.query(Score.candidate_id).filter(Score.user_id == user_id).all()
+        return_candidates = [i for i, in candidates_id]
 
-        cand_ids = self.session.query(Score.user_id).filter(Score.candidate_id == user_id).all()
-        return_candidates = return_candidates + [i for i, in cand_ids]
+        candidates_id = self.session.query(Score.user_id).filter(Score.candidate_id == user_id).all()
+        return_candidates = return_candidates + [i for i, in candidates_id]
 
         return return_candidates
 
     def get_top_10_candidates(self, user_id):
-        cand_ids = self.session.query(Score.candidate_id, Score.score).filter(Score.user_id == user_id).order_by(
+        candidates_id = self.session.query(Score.candidate_id, Score.score).filter(Score.user_id == user_id).order_by(
             Score.score.desc()).all()
-        return cand_ids[:10]
+        return candidates_id[:10]
 
     def add_score(self, user_id: Integer, cand_score: list):
         """
@@ -222,7 +238,7 @@ class DBVK():
         self.session.query(Score).delete()
         self.session.commit()
 
-    def init_database(self):
+    def __init_database(self):
         """
         Create all tables
         :return: No return
@@ -265,19 +281,5 @@ class Score(Base):
 if __name__ == '__main__':
     pass
 else:
-    # validate connection and database and connect to vk db
     dbvk = DBVK()
-    if not dbvk.check_connection():
-        print('Error. Unable create connection to database. Check that Postgres ',
-              'server is running and that credentials in system_settings.py are correct.')
-        exit(1)
-    if not dbvk.check_vk_db_exists():
-        if not dbvk.create_vk_db():
-            print(f'Error during creation database {dbvk.db_name_vk}')
-            exit(1)
-    if not dbvk.connect_to_vk_db():
-        print(f'Error during connection to database {dbvk.db_name_vk}')
-        exit(1)
-    if not dbvk.init_database():
-        print(f'Unable to create tables in {dbvk.db_name_vk} database')
-        exit(1)
+    dbvk.check_connect_create()

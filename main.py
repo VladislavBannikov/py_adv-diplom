@@ -1,19 +1,21 @@
-from VK.VK import VKBase
-from VK.User import User
-from VK.VK_utils import search_candidates_users, score_candidates
+from vk.vk_module import VKBase
+from vk.user_module import User
+from vk.vk_utils import search_candidates_users, score_candidates
 import db.db_orm
 import json
 import os
 from settings import VK_COUNT_TO_FIND
-import datetime
+from user_info_helper import ask_additional_info, all_info_fields
 
 info_message = '''u - Select lonely user
 s - Search new candidates for lonely user
+i - show lonely user info 
+p - update lonely user info (books, interests, birth date)
 t - Top 10 scored candidates (from local database)
 r - delete all data from local database
 q - for exit
 '''
-cmd_list = ["u", "r", "t", "s", "q"]
+cmd_list = ("u", "r", "t", "s", "q", "i", "p")
 
 # Test Users ----------
 # 'svetlana_belyaeva_photographer'
@@ -26,35 +28,29 @@ def output_result(cand_score1):
     print(os.linesep, "Best candidates for lonely user:")
     with open("out.json", "w", encoding="utf-8") as f:
         json_result = []
-        out_pattern = '{:<40}{:<10}{:<120}'
+        out_pattern = '{:<40}{:<10}{:<40}{:<10}{:<120}'
         if cand_score1:
-            print(out_pattern.format("Link", "Score", "Photos"))
+            print(out_pattern.format("Name", "Fr. count", "Link", "Score", "Photos"))
         for cs in cand_score1:
             photos = cs[0].get_photos()
-            j_out = {"user_url": str(cs[0]), "score": round(cs[1], 2), "photos_id": photos}
+            j_out = {"first_last_name": cs[0].get_first_last_name(),
+                     "friends_count": cs[0].get_friends_count(),
+                     "user_url": str(cs[0]),
+                     "score": round(cs[1], 2),
+                     "photos_id": photos}
             json_result.append(j_out)
-            print(out_pattern.format(j_out['user_url'], j_out['score'], str(photos)))
+            print(out_pattern.format(j_out['first_last_name'],
+                                     j_out['friends_count'],
+                                     j_out['user_url'],
+                                     j_out['score'],
+                                     str(photos)))
         f.write(json.dumps(json_result, indent=True))
-
-
-def validate_date(date_text: str):
-    try:
-        datetime.datetime.strptime(date_text, '%Y-%m-%d')
-    except ValueError:
-        return False
-    return True
-
-
-def validate_text(text: str):
-    if str.strip:
-        return True
-    else:
-        return False
 
 
 if __name__ == '__main__':
     VKBase.test_vk_connection_with_prompt()
     db = db.db_orm.dbvk
+
     lonely_user: User = None
     lonely_user = User('585578161')
 
@@ -63,22 +59,6 @@ if __name__ == '__main__':
         already_checked_users_ids = db.get_candidates_id(user_id)
         print("Numer of scored candidates in database:", len(
             already_checked_users_ids))
-
-
-    def ask_additional_info(empty_fields):
-        for_loop_info = {"books": {"msg": "Enter books (comma separated)", "val_func": validate_text},
-                         "interests": {"msg": "Enter interests (comma separated)", "val_func": validate_text},
-                         "bdate": {"msg": "Enter birth date (in dd.mm.yyyy format)", "val_func": validate_date}}
-
-        new_info = {}
-        for kind in empty_fields:
-            user_input = input(for_loop_info.get(kind).get("msg") + ":")
-            val_func = for_loop_info.get(kind).get("val_func")
-            if val_func(user_input):
-                new_info.update({kind: user_input})
-
-            lonely_user.update_info_from_dict(new_info, db_write=True)
-            lonely_user.set_is_additional_info_requested(True)
 
 
     def check_lonely_user_selected():
@@ -99,9 +79,21 @@ if __name__ == '__main__':
             elif cmd == 'u':  # select lonely user
                 lonely_user = User(input("Enter lonely user id or screen name:").strip())
                 if lonely_user.is_closed():
-                    print("Your profile is private. Accuracy of search will be low. We advice you to open the profile" \
-                          " and repeat the search. You can continue now with low accuracy.")
+                    print('''Your profile is private. Accuracy of search will be low. We advice you to open the profile
+                             and repeat the search. You can continue now with low accuracy.''')
                 print_candidate_count_for_user(lonely_user.get_id())
+            elif cmd == 'p':  # update info (books, interests, birth date)
+                if not check_lonely_user_selected():
+                    continue
+                ask_additional_info(lonely_user, all_info_fields)
+            elif cmd == 'i':  # show lonely user info
+                if not check_lonely_user_selected():
+                    continue
+                out_pattern = '{:<30}{:<100}'
+                print("Lonely user info:")
+                for k, v in lonely_user.get_info().items():
+                    print(out_pattern.format(k, str(v)))
+
             elif cmd == 't':  # Top 10 scored candidates (from local database)
                 if not check_lonely_user_selected():
                     continue
@@ -109,7 +101,7 @@ if __name__ == '__main__':
                 if not best_cand:
                     print("Candidates not found in local database. Probably you haven't searched yet.")
                     continue
-                best_cand = [[User(c[0]), c[1]] for c in best_cand]
+                best_cand = ((User(c[0]), c[1]) for c in best_cand)
                 output_result(best_cand)
 
             elif cmd == 's':  # new search. Find candidates for lonely user;
@@ -119,7 +111,7 @@ if __name__ == '__main__':
                 if not lonely_user.get_is_additional_info_requested():
                     empty_fields = lonely_user.check_info_completeness()
                     if empty_fields:
-                        ask_additional_info(empty_fields)
+                        ask_additional_info(lonely_user, empty_fields)
 
                 ## find candidates and its score
                 print_candidate_count_for_user(lonely_user.get_id())
@@ -137,7 +129,8 @@ if __name__ == '__main__':
                 if not (db.get_info_by_id(lonely_user.get_id())):  # add lonely user to database if isn't there
                     infos.append(lonely_user.get_info())
                 db.add_several_users(infos)
-                db.add_score(lonely_user.get_id(), [[s[0].get_id(), s[1]] for s in cand_score])
+                score = ((s[0].get_id(), s[1]) for s in cand_score)
+                db.add_score(lonely_user.get_id(), score)
 
                 ##  add photos to DB for 10 users with best match
                 for s in cand_score[:10]:
